@@ -2,8 +2,7 @@
 import streamlit as st
 import pandas as pd
 import mysql.connector
-from datetime import datetime
-
+from datetime import datetime, timedelta
 # ─────────────────────────────────────────────
 # Page Config
 # ─────────────────────────────────────────────
@@ -257,7 +256,19 @@ with st.sidebar:
 
     if db_ok and not cities_df.empty:
         city_options = sorted(cities_df["city_name"].dropna().unique().tolist())
-        selected_city = st.selectbox("🏙️ Select City", city_options)
+        city_input = st.text_input("🔍 Type a city name", placeholder="e.g. Cairo, London...")
+        # filter matches
+        if city_input.strip():
+            matches = [c for c in city_options if city_input.strip().lower() in c.lower()]
+        else:
+            matches = []
+        if matches:
+            selected_city = st.selectbox("📍 Select from matches", matches)
+        elif city_input.strip():
+            st.warning(f"No city found matching **{city_input}**")
+            selected_city = None
+        else:
+            selected_city = None
     else:
         selected_city = None
         st.warning("No cities found in database.")
@@ -329,7 +340,7 @@ st.markdown(f"""
   <div style='display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;'>
     <div>
       <div style='font-size:34px;font-weight:900;color:#e6edf3;'>{emoji} {selected_city}, {state}, {country}</div>
-      <div style='font-size:14px;color:#8b949e;margin-top:6px;'>Last updated by Airflow: {last_upd} &nbsp;•&nbsp; {desc.title()}</div>
+
       <div style='margin-top:10px;'>
         <span style='background:{bg};color:{fg};padding:4px 14px;border-radius:20px;font-size:13px;font-weight:700;'>{lv}</span>
       </div>
@@ -386,7 +397,27 @@ with col_l:
 with col_r:
     st.markdown('<div class="section-header">📅 5-Day Forecast</div>', unsafe_allow_html=True)
     if city_forecast.empty:
-        st.info("No forecast data available yet for this city.")
+        st.caption("⚠️ No forecast from Airflow yet — run forecast_weather_dag to get real data")
+        day_names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+        today_dt  = datetime.today()
+        # use only the latest single current reading repeated across all 5 slots
+        latest    = city_current.iloc[0]
+        r_temp    = float(latest["temp"])
+        r_desc    = str(latest.get("weather_desc", ""))
+        cols_f    = st.columns(5)
+        for i in range(5):
+            d      = today_dt + timedelta(days=i)
+            label  = "Today" if i == 0 else day_names[d.weekday()]
+            border = "border-color:#58a6ff;" if i == 0 else "opacity:0.5;"
+            note   = "current reading" if i == 0 else "no data yet"
+            cols_f[i].markdown(f"""
+            <div class="forecast-card" style='{border}'>
+                <div class="forecast-day">{label}</div>
+                <div style='font-size:24px;margin:6px 0;'>{weather_emoji(r_desc)}</div>
+                <div class="forecast-temp">{r_temp:.0f}°</div>
+                <div style='color:#8b949e;font-size:11px;'>{note}</div>
+                <div class="forecast-desc">{r_desc[:14]}</div>
+            </div>""", unsafe_allow_html=True)
     else:
         city_forecast = city_forecast.copy()
         city_forecast["dt"] = pd.to_datetime(city_forecast["dt"])
