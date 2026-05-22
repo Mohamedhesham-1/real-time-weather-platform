@@ -1,0 +1,5 @@
+apache-airflow==3.2.1
+mysql-connector-python
+pandas
+requests
+numpy
